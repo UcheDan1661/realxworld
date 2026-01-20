@@ -2,9 +2,8 @@ import NextAuth, { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { User, UserRole } from '@/types/auth';
-
-// In-memory user store (replace with database in production)
-const users: User[] = [];
+import connectMongo from '@/dbconfig/dbconn';
+import UserModel from '@/models/User';
 
 export const config: NextAuthConfig = {
   providers: [
@@ -19,29 +18,37 @@ export const config: NextAuthConfig = {
           return null;
         }
 
-        const email = credentials.email as string;
-        const password = credentials.password as string;
+        try {
+          // Connect to database
+          await connectMongo();
 
-        const user = users.find((u) => u.email === email);
-        if (!user || !user.password) {
+          const email = credentials.email as string;
+          const password = credentials.password as string;
+
+          // Find user by email and include password
+          const user = await UserModel.findOne({ email: email.toLowerCase() }).select('+password');
+
+          if (!user || !user.password) {
+            return null;
+          }
+
+          // Verify password
+          const isPasswordValid = await bcrypt.compare(password, user.password);
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
+        } catch (error) {
+          console.error('Authorization error:', error);
           return null;
         }
-
-        const isPasswordValid = await bcrypt.compare(
-          password,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
       },
     }),
   ],
@@ -79,27 +86,62 @@ export async function createUser(
   name: string,
   role: UserRole = 'buyer'
 ): Promise<User | null> {
-  // Check if user already exists
-  if (users.find((u) => u.email === email)) {
+  try {
+    // Connect to database
+    await connectMongo();
+
+    // Check if user already exists
+    const existingUser = await UserModel.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return null;
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new user
+    const newUser = await UserModel.create({
+      email: email.toLowerCase(),
+      name: name.trim(),
+      password: hashedPassword,
+      role,
+    });
+
+    // Return user without password
+    return {
+      id: newUser._id.toString(),
+      email: newUser.email,
+      name: newUser.name,
+      role: newUser.role,
+    };
+  } catch (error) {
+    console.error('Error creating user:', error);
     return null;
   }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser: User = {
-    id: Date.now().toString(),
-    email,
-    name,
-    role,
-    password: hashedPassword,
-  };
-
-  users.push(newUser);
-  return { ...newUser, password: undefined };
 }
 
 // Helper function to get user by email
-export function getUserByEmail(email: string): User | undefined {
-  return users.find((u) => u.email === email);
+export async function getUserByEmail(email: string): Promise<User | null> {
+  try {
+    // Connect to database
+    await connectMongo();
+
+    const user = await UserModel.findOne({ email: email.toLowerCase() });
+    
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+  } catch (error) {
+    console.error('Error getting user by email:', error);
+    return null;
+  }
 }
 
 // Export auth function for NextAuth v5
