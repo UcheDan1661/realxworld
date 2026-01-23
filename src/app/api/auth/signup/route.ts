@@ -20,22 +20,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await createUser(email, password, name, role || 'buyer');
+      const user = await createUser(email, password, name, role || 'buyer');
 
-    if (!user) {
+      if (!user) {
+        return NextResponse.json(
+          { error: 'User already exists' },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 409 }
+        { 
+          message: 'User created successfully', 
+          user,
+          // Include database info for debugging
+          debug: {
+            database: process.env.MONGODB_ATLAS_URL ? 'Atlas' : 'Local',
+            collection: 'users'
+          }
+        },
+        { status: 201 }
       );
-    }
-
+  } catch (error) {
+    console.error('Signup route error:', error);
     return NextResponse.json(
-      { message: 'User created successfully', user },
-      { status: 201 }
-    );
-  } catch {
-    return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

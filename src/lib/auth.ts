@@ -93,6 +93,7 @@ export async function createUser(
     // Check if user already exists
     const existingUser = await UserModel.findOne({ email: email.toLowerCase() });
     if (existingUser) {
+      console.log('User already exists with email:', email);
       return null;
     }
 
@@ -107,6 +108,13 @@ export async function createUser(
       role,
     });
 
+    console.log('✅ User created successfully:', {
+      id: newUser._id.toString(),
+      email: newUser.email,
+      name: newUser.name,
+      role: newUser.role,
+    });
+
     // Return user without password
     return {
       id: newUser._id.toString(),
@@ -115,7 +123,7 @@ export async function createUser(
       role: newUser.role,
     };
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('❌ Error creating user:', error);
     return null;
   }
 }
