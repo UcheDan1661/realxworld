@@ -1,13 +1,17 @@
 import mongoose from 'mongoose';
 
-// Check for MongoDB URI - prioritize MONGODB_ATLAS_URL if available, otherwise use MONGODB_LOCAL_URL
-const MONGODB_URI = process.env.MONGODB_ATLAS_URL || process.env.MONGODB_LOCAL_URL;
-
-// If MongoDb uri is not provided we will throw an error
-if (!MONGODB_URI) {
-  throw new Error(
-    'Please define MONGODB_ATLAS_URL or MONGODB_LOCAL_URL environment variable inside .env.local'
-  );
+// Function to get MongoDB URI - check at runtime, not at module load time
+// This prevents build-time errors when env vars aren't available
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_ATLAS_URL || process.env.MONGODB_LOCAL_URL;
+  
+  if (!uri) {
+    throw new Error(
+      'Please define MONGODB_ATLAS_URL or MONGODB_LOCAL_URL environment variable inside .env.local'
+    );
+  }
+  
+  return uri;
 }
 
 // Cache the connection across hot reloads in development
@@ -34,8 +38,10 @@ async function connectMongo() {
       maxPoolSize: 10,
     }
     
+    // Get URI at runtime (not at module load time)
+    const MONGODB_URI = getMongoUri();
     console.log('Connecting to MongoDB...');
-    cached.promise = mongoose.connect(MONGODB_URI as string, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
       console.log('✅ MongoDB connected successfully');
       console.log('Database name:', mongooseInstance.connection.name);
       return mongooseInstance;
