@@ -123,8 +123,13 @@ export async function createUser(
       role: newUser.role,
     };
   } catch (error) {
+    // MongoDB duplicate key (E11000) = email already exists (race or unique index)
+    const mongoErr = error as { code?: number };
+    if (mongoErr?.code === 11000 || mongoErr?.code === 11001) {
+      return null; // → signup route returns 409 "User already exists"
+    }
     console.error('❌ Error creating user:', error);
-    return null;
+    throw error; // re-throw so route returns 500, not 409
   }
 }
 
